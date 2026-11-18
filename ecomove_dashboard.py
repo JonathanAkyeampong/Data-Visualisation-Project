@@ -50,6 +50,7 @@ def kpi(id_, label):
 
 
 app = Dash(__name__, title="EcoMove Mobility Dashboard")
+server = app.server  # WSGI entry point for hosting (gunicorn ecomove_dashboard:server)
 app.index_string = app.index_string.replace("</head>", """
 <style>
  body{margin:0;background:%s;font-family:%s;color:%s}

@@ -1,7 +1,7 @@
 .venv/
 __pycache__/
-data/
-*.xlsx
+data/*
+!data/EcoMoveMobility.xlsx
 *.docx
 run_output.txt
 .DS_Store
