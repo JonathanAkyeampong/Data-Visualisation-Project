@@ -9,10 +9,11 @@ EcoMove City Transport Authority dataset (public transport and shared mobility i
 | File | Purpose |
 |---|---|
 | `ecomove_analysis.py` | Loads and cleans the data, prints quality checks and summary tables, and saves eight figures to `figures/` |
-| `ecomove_dashboard.py` | Interactive Plotly Dash dashboard with date, city, mode, route, weather and event-day filters |
+| `ecomove_dashboard.py` | Interactive Plotly Dash dashboard with date, country, city, mode, route, weather and event-day filters |
+| `EcoMove_Analysis.ipynb` | Local step-by-step notebook: load, inspect, quality checks, cleaning, summary tables and figures |
 | `EcoMove_Colab.ipynb` | Step-by-step notebook for running everything in Google Colab |
 | `figures/` | The eight static visualisations |
-| `screenshots/` | Dashboard screenshots, unfiltered and filtered to snow days |
+| `screenshots/` | Process screenshots (notebook run) and dashboard screenshots, unfiltered and filtered to snow days |
 
 ## Figures
 

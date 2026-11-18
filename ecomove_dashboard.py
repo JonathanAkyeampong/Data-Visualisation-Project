@@ -13,7 +13,7 @@ from ecomove_analysis import load_data
 
 df = load_data()
 
-BLUE, ORANGE, RED, GREY = "#2a78d6", "#eb6834", "#e34948", "#9a9993"
+BLUE, ORANGE, RED, GREY, AQUA = "#2a78d6", "#eb6834", "#e34948", "#9a9993", "#1baf7a"
 INK, INK2, GRID, SURFACE, PAGE = "#0b0b0b", "#52514e", "#e6e5e0", "#ffffff", "#f4f4f1"
 FONT = "Inter, Segoe UI, Helvetica, Arial, sans-serif"
 
@@ -55,7 +55,7 @@ app.index_string = app.index_string.replace("</head>", """
  body{margin:0;background:%s;font-family:%s;color:%s}
  .wrap{max-width:1400px;margin:0 auto;padding:20px 24px 40px}
  h1{font-size:24px;margin:0 0 4px} .lede{color:%s;margin:0 0 16px;font-size:14px}
- .filters{display:grid;grid-template-columns:1.3fr repeat(5,1fr);gap:12px;background:#fff;
+ .filters{display:grid;grid-template-columns:1.3fr repeat(6,1fr);gap:12px;background:#fff;
    padding:14px;border-radius:10px;border:1px solid %s;margin-bottom:16px}
  .flabel{font-size:12px;font-weight:600;color:%s;display:block;margin-bottom:4px}
  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
@@ -80,6 +80,7 @@ app.layout = html.Div(className="wrap", children=[
                                       max_date_allowed=df.Date.max(),
                                       start_date=df.Date.min(), end_date=df.Date.max(),
                                       display_format="DD MMM YYYY")]),
+        dropdown("country", "Country", "Country"),
         dropdown("city", "City", "City"),
         dropdown("mode", "Transport mode", "Transport_Mode"),
         dropdown("route", "Route type", "Route_Type"),
@@ -95,17 +96,18 @@ app.layout = html.Div(className="wrap", children=[
     html.Div(className="grid", children=[
         html.Div(dcc.Graph(id="g-trend"), className="card wide"),
         html.Div(dcc.Graph(id="g-city"), className="card"),
+        html.Div(dcc.Graph(id="g-country"), className="card"),
         html.Div(dcc.Graph(id="g-mode"), className="card"),
         html.Div(dcc.Graph(id="g-weather"), className="card"),
         html.Div(dcc.Graph(id="g-access"), className="card"),
-        html.Div(dcc.Graph(id="g-co2"), className="card wide"),
+        html.Div(dcc.Graph(id="g-co2"), className="card"),
     ]),
 ])
 
 
-def filter_df(start, end, city, mode, route, weather, event):
+def filter_df(start, end, country, city, mode, route, weather, event):
     d = df[(df.Date >= start) & (df.Date <= end)]
-    for col, sel in [("City", city), ("Transport_Mode", mode), ("Route_Type", route),
+    for col, sel in [("Country", country), ("City", city), ("Transport_Mode", mode), ("Route_Type", route),
                      ("Weather", weather), ("Event_Day", event)]:
         if sel:
             d = d[d[col].isin(sel)]
@@ -127,13 +129,14 @@ def empty(title):
       "k-sat", "k-sat-sub", "k-co2", "k-co2-sub", "k-acc", "k-acc-sub",
       "k-rev", "k-rev-sub", "k-delay", "k-delay-sub"]] +
     [Output(i, "figure") for i in
-     ["g-trend", "g-city", "g-mode", "g-weather", "g-access", "g-co2"]],
+     ["g-trend", "g-city", "g-country", "g-mode", "g-weather", "g-access", "g-co2"]],
     [Input("dates", "start_date"), Input("dates", "end_date"),
-     Input("city", "value"), Input("mode", "value"), Input("route", "value"),
+     Input("country", "value"), Input("city", "value"), Input("mode", "value"), Input("route", "value"),
      Input("weather", "value"), Input("event", "value")])
-def update(start, end, city, mode, route, weather, event):
-    d = filter_df(start, end, city, mode, route, weather, event)
+def update(start, end, country, city, mode, route, weather, event):
+    d = filter_df(start, end, country, city, mode, route, weather, event)
     titles = ["Monthly passengers and average delay", "Passenger demand by city",
+              "Demand and cost recovery by country",
               "Cost recovery by transport mode", "Delay distribution by weather",
               "Accessibility complaints per 10,000 passengers by route type",
               "CO2 saved by city and transport mode (tonnes)"]
@@ -172,6 +175,21 @@ def update(start, end, city, mode, route, weather, event):
     f2 = style(f2, titles[1], 380)
     f2.update_layout(xaxis_title="Passengers", yaxis_title=None)
 
+    # 2b. Country comparison: passengers per country, cost recovery in hover and label
+    k = d.groupby("Country").agg(P=("Passengers", "sum"), R=("Ticket_Revenue_EUR", "sum"),
+                                 C=("Operating_Cost_EUR", "sum"), N=("City", "nunique"),
+                                 RT=("Customer_Rating", "mean")).reset_index()
+    k["CR"] = k.R / k.C
+    k = k.sort_values("P")
+    fc = go.Figure(go.Bar(x=k.P / 1e6, y=k.Country, orientation="h", marker_color=AQUA,
+                          text=[f"CR {v:.2f}" for v in k.CR], textposition="outside",
+                          customdata=k[["N", "CR", "RT"]],
+                          hovertemplate="%{y}<br>%{x:.2f}m passengers across %{customdata[0]} cities"
+                                        "<br>Cost recovery %{customdata[1]:.2f}<br>Rating %{customdata[2]:.2f}<extra></extra>"))
+    fc = style(fc, titles[2], 380)
+    fc.update_layout(xaxis_title="Passengers (millions)  ·  label = cost-recovery ratio",
+                     xaxis_range=[0, k.P.max() / 1e6 * 1.25])
+
     # 3. Cost recovery by mode
     t = d.groupby("Transport_Mode").agg(R=("Ticket_Revenue_EUR", "sum"), C=("Operating_Cost_EUR", "sum")).reset_index()
     t["CR"] = t.R / t.C
@@ -182,14 +200,14 @@ def update(start, end, city, mode, route, weather, event):
                           hovertemplate="%{y}<br>Cost recovery %{x:.2f}<extra></extra>"))
     f3.add_vline(x=1, line_dash="dash", line_color=INK2,
                  annotation_text="break-even", annotation_position="bottom right")
-    f3 = style(f3, titles[2], 380)
+    f3 = style(f3, titles[3], 380)
     f3.update_layout(xaxis_title="Revenue / operating cost", xaxis_range=[0, max(1.4, t.CR.max() * 1.15)])
 
     # 4. Delay by weather
     order = d.groupby("Weather").Average_Delay_Minutes.median().sort_values().index.tolist()
     f4 = px.box(d, x="Weather", y="Average_Delay_Minutes", category_orders={"Weather": order})
     f4.update_traces(marker_color=BLUE, line_color=BLUE, fillcolor="rgba(42,120,214,0.25)")
-    f4 = style(f4, titles[3])
+    f4 = style(f4, titles[4])
     f4.update_layout(yaxis_title="Delay (min)", xaxis_title=None)
 
     # 5. Accessibility complaints rate by route type
@@ -199,7 +217,7 @@ def update(start, end, city, mode, route, weather, event):
     f5 = go.Figure(go.Bar(x=a.Rate, y=a.Route_Type, orientation="h", marker_color=ORANGE,
                           text=[f"{v:.1f}" for v in a.Rate], textposition="outside",
                           hovertemplate="%{y}<br>%{x:.1f} complaints per 10k passengers<extra></extra>"))
-    f5 = style(f5, titles[4])
+    f5 = style(f5, titles[5])
     f5.update_layout(xaxis_title="Complaints per 10,000 passengers", xaxis_range=[0, a.Rate.max() * 1.2])
 
     # 6. CO2 treemap
@@ -209,10 +227,10 @@ def update(start, end, city, mode, route, weather, event):
                     color="Tonnes", color_continuous_scale=["#cde2fb", "#5598e7", "#104281"])
     f6.update_traces(hovertemplate="%{label}<br>%{value:,.0f} t CO2 saved<extra></extra>",
                      marker=dict(line=dict(color="white", width=2)))
-    f6 = style(f6, titles[5], 420)
+    f6 = style(f6, titles[6], 420)
     f6.update_layout(coloraxis_showscale=False, margin=dict(l=10, r=10, t=50, b=10))
 
-    return kpis + [f1, f2, f3, f4, f5, f6]
+    return kpis + [f1, f2, fc, f3, f4, f5, f6]
 
 
 if __name__ == "__main__":
